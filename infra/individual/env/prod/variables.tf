@@ -30,3 +30,9 @@ variable "batch_cluster" {
     task_memory = number
   })
 }
+
+variable "batch_schedule_state" {
+  description = "EventBridge Scheduler の定期実行の状態（ENABLED / DISABLED）"
+  type        = string
+  default     = "ENABLED"
+}

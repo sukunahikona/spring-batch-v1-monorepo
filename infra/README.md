@@ -92,8 +92,24 @@ graph TB
 | ECR | `spring-batch-v1-prod-spring-batch-app-v1`（最新30イメージ保持） |
 | ECS クラスタ | `spring-batch-v1-prod-cluster`（Fargate、Container Insights有効） |
 | ECS タスク定義 | `spring-batch-v1-prod-spring-batch`（CPU: 512、Memory: 1024） |
-| EventBridge Scheduler | `sampleJob`・`userFetchJob` を毎分実行 |
+| EventBridge Scheduler | `sampleJob`・`userFetchJob` を毎分実行（`batch_schedule_state` で停止可能） |
 | IAM（GitHub Actions） | OIDC経由でECRプッシュ権限を付与 |
+
+---
+
+## 定期実行の停止・再開
+
+EventBridge Scheduler の状態は、`infra/individual/env/prod/terraform.tfvars` の `batch_schedule_state` で切り替えます。
+
+| 値 | 動作 |
+|---|---|
+| `ENABLED` | `sampleJob`・`userFetchJob` を毎分実行する |
+| `DISABLED` | 定期実行を停止する（現在の設定） |
+
+```bash
+cd infra/individual/env/prod
+terraform apply   # tfvars の値を変更してから実行
+```
 
 ---
 

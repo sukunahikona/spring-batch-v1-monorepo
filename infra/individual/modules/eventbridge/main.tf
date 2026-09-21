@@ -61,6 +61,7 @@ resource "aws_scheduler_schedule" "sample_job" {
 
   schedule_expression          = "rate(1 minute)"
   schedule_expression_timezone = "Asia/Tokyo"
+  state                        = var.schedule_state
 
   target {
     arn      = var.cluster_arn
@@ -107,6 +108,7 @@ resource "aws_scheduler_schedule" "user_fetch_job" {
 
   schedule_expression          = "rate(1 minute)"
   schedule_expression_timezone = "Asia/Tokyo"
+  state                        = var.schedule_state
 
   target {
     arn      = var.cluster_arn

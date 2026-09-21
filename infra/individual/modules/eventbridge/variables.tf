@@ -28,3 +28,13 @@ variable "ecs_task_security_group_id" {
   type        = string
 }
 
+variable "schedule_state" {
+  description = "スケジュールの状態（ENABLED: 定期実行する / DISABLED: 停止する）"
+  type        = string
+  default     = "ENABLED"
+
+  validation {
+    condition     = contains(["ENABLED", "DISABLED"], var.schedule_state)
+    error_message = "schedule_state は ENABLED または DISABLED を指定してください。"
+  }
+}

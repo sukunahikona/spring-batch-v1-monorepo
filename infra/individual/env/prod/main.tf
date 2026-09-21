@@ -51,6 +51,7 @@ module "eventbridge" {
   task_definition_arn        = module.ecs.task_definition_arn
   private_subnet_ids         = module.ecs.private_subnet_ids
   ecs_task_security_group_id = module.ecs.ecs_task_security_group_id
+  schedule_state             = var.batch_schedule_state
 }
 
 module "ecs" {
