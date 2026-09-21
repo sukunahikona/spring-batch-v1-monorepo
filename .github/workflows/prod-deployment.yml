@@ -1,0 +1,42 @@
+name: Prod Deployment
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'apps/spring-batch-app-v1/**'
+      - '.github/workflows/**'
+  # 手動実行  
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  ###############################################################################
+  # ユニットテスト
+  ###############################################################################
+  test:
+    uses: ./.github/workflows/unit-test.yml
+
+  ###############################################################################
+  # Docker イメージのビルド
+  ###############################################################################
+  build:
+    needs: test
+    uses: ./.github/workflows/build.yml
+    with:
+      ecr_repository: spring-batch-v1-prod-spring-batch-app-v1
+
+  ###############################################################################
+  # ECR へのプッシュ
+  ###############################################################################
+  push:
+    needs: build
+    uses: ./.github/workflows/push.yml
+    with:
+      aws_region: ap-northeast-1
+      ecr_repository: spring-batch-v1-prod-spring-batch-app-v1
+    secrets:
+      aws_deploy_role_arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}

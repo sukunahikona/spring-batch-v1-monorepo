@@ -1,0 +1,51 @@
+name: Push
+
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        required: true
+        type: string
+      ecr_repository:
+        required: true
+        type: string
+    secrets:
+      aws_deploy_role_arn:
+        required: true
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: artifact から tar をダウンロード
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Docker イメージをロード
+        run: docker load -i image.tar
+
+      - name: AWS 認証（OIDC）
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.aws_deploy_role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: ECR ログイン
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: ECR へプッシュ
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker tag ${{ inputs.ecr_repository }}:$IMAGE_TAG $ECR_REGISTRY/${{ inputs.ecr_repository }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/${{ inputs.ecr_repository }}:$IMAGE_TAG
+          docker tag ${{ inputs.ecr_repository }}:$IMAGE_TAG $ECR_REGISTRY/${{ inputs.ecr_repository }}:latest
+          docker push $ECR_REGISTRY/${{ inputs.ecr_repository }}:latest

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.sukunahikona.batch_app.mapper.ProductMapper">
+
+    <select id="findAll" resultType="org.sukunahikona.batch_app.entity.Product">
+        SELECT
+            id,
+            product_code,
+            product_name,
+            price,
+            stock_quantity,
+            is_available,
+            created_at
+        FROM
+            products
+        ORDER BY
+            id
+    </select>
+
+</mapper>

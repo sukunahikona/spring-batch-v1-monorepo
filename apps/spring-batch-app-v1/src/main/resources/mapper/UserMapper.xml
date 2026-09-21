@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.sukunahikona.batch_app.mapper.UserMapper">
+
+    <select id="findAll" resultType="org.sukunahikona.batch_app.entity.User">
+        SELECT
+            id,
+            name,
+            email,
+            status,
+            created_at,
+            updated_at
+        FROM
+            users
+        ORDER BY
+            id
+    </select>
+
+</mapper>

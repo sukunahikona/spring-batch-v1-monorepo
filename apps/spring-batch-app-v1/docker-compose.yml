@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: batch-app-postgres
+    environment:
+      POSTGRES_DB: batchdb
+      POSTGRES_USER: batchuser
+      POSTGRES_PASSWORD: batchpass
+      TZ: Asia/Tokyo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  batch-app:
+    build:
+      context: .
+      dockerfile: batch/Dockerfile
+    container_name: batch-app
+    environment:
+      JOB_NAME: ${JOB_NAME:-sampleJob}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/batchdb
+      SPRING_DATASOURCE_USERNAME: batchuser
+      SPRING_DATASOURCE_PASSWORD: batchpass
+      TZ: Asia/Tokyo
+    depends_on:
+      - postgres
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+    driver: local
