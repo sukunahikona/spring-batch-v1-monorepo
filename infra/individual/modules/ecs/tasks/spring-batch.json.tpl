@@ -25,6 +25,10 @@
       {
         "name": "SPRING_DATASOURCE_PASSWORD",
         "valueFrom": "/${project}/${environment}/rds/password"
+      },
+      {
+        "name": "SLACK_WEBHOOK_URL",
+        "valueFrom": "/${project}/${environment}/slack/webhook_url"
       }
     ],
     "logConfiguration": {

@@ -13,12 +13,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.sukunahikona.batch_app.notification.SlackJobExecutionListener;
 
 @Configuration
 public class BatchJobConfiguration {
 
     @Bean
     public Job sampleJob(JobRepository jobRepository,
+                                SlackJobExecutionListener slackJobExecutionListener,
                                 PlatformTransactionManager transactionManager,
                                 @Qualifier("sampleTaskletOne") Tasklet sampleTaskletOne) {
 
@@ -27,12 +29,14 @@ public class BatchJobConfiguration {
                 .build();
 
         return new JobBuilder("sampleJob", jobRepository)
+                .listener(slackJobExecutionListener)
                 .start(stepOne)
                 .build();
     }
 
     @Bean
     public Job sampleContinuingJob(JobRepository jobRepository,
+                         SlackJobExecutionListener slackJobExecutionListener,
                          PlatformTransactionManager transactionManager,
                          @Qualifier("sampleTaskletOne") Tasklet sampleTaskletOne,
                          @Qualifier("sampleTaskletTwo") Tasklet sampleTaskletTwo) {
@@ -46,6 +50,7 @@ public class BatchJobConfiguration {
                 .build();
 
         return new JobBuilder("sampleContinuingJob", jobRepository)
+                .listener(slackJobExecutionListener)
                 .start(stepOne)
                 .next(stepTwo)
                 .build();
@@ -53,6 +58,7 @@ public class BatchJobConfiguration {
 
     @Bean
     public Job parallelJob(JobRepository jobRepository,
+                           SlackJobExecutionListener slackJobExecutionListener,
                            PlatformTransactionManager transactionManager,
                            @Qualifier("parallelTaskletOne") Tasklet parallelTaskletOne,
                            @Qualifier("parallelTaskletTwo") Tasklet parallelTaskletTwo,
@@ -90,6 +96,7 @@ public class BatchJobConfiguration {
                 .build();
 
         return new JobBuilder("parallelJob", jobRepository)
+                .listener(slackJobExecutionListener)
                 .start(splitFlow)
                 .next(finalStep)
                 .end()

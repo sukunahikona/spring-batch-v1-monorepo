@@ -45,5 +45,11 @@ module "ssm_parameter" {
       type        = "SecureString"
       description = "RDS database password"
     }
+    # Slack Incoming Webhook URL（初期値はdummy。発行後にAWS ConsoleまたはCLIで直接更新する）
+    "slack/webhook_url" = {
+      value       = "dummy"
+      type        = "SecureString"
+      description = "Slack Incoming Webhook URL for batch notifications"
+    }
   }
 }
