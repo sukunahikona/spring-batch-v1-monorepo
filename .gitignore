@@ -3,3 +3,5 @@
 *.tfstate.backup
 *.pem
 .claude/settings.local.json
+tfplan
+*.tfplan
