@@ -25,7 +25,7 @@ GitHub Actions のワークフローはリポジトリルートの `.github/work
 
 | ワークフロー | 役割 |
 |---|---|
-| `prod-deployment.yml` | エントリーポイント。PR（`apps/spring-batch-app-v1/**` または `.github/workflows/**` の変更時）と手動実行で起動 |
+| `prod-deployment.yml` | エントリーポイント。PR ではテストとビルドまで、`main` への push と手動実行では ECR プッシュまで実行（対象は `apps/spring-batch-app-v1/**` と `.github/workflows/**` の変更時） |
 | `unit-test.yml` | ユニットテスト（再利用ワークフロー） |
 | `build.yml` | Docker イメージのビルド（再利用ワークフロー） |
 | `push.yml` | OIDC 認証で ECR へプッシュ（再利用ワークフロー） |
@@ -33,7 +33,7 @@ GitHub Actions のワークフローはリポジトリルートの `.github/work
 ### 初期設定
 
 1. `infra/common/env/prod/bootstrap` → `infra/common/env/prod` → `infra/individual/env/prod` の順に `terraform apply`
-2. individual スタックの出力 `github_actions_role_arn` を、このリポジトリのシークレット `AWS_DEPLOY_ROLE_ARN` に登録
+2. individual スタックの出力 `github_actions_role_arn` を、`.github/workflows/prod-deployment.yml` の `aws_deploy_role_arn` に記載する（ロールARNは秘密情報ではないため、シークレット登録は不要）
 
 IAM ロールの信頼ポリシーは `infra/individual/env/prod/terraform.tfvars` の `github_org` / `github_repo`（= 本リポジトリ）に紐づきます。
 
