@@ -32,3 +32,13 @@ output "private_subnet_ids" {
   description = "Private subnet IDs used by ECS tasks"
   value       = var.private_subnet_ids
 }
+
+output "task_role_arn" {
+  description = "ECS task role ARN"
+  value       = aws_iam_role.ecs_task.arn
+}
+
+output "log_group_arn" {
+  description = "CloudWatch Logs log group ARN for the batch task"
+  value       = aws_cloudwatch_log_group.spring_batch.arn
+}

@@ -38,8 +38,18 @@ module "iam" {
   project            = var.project
   environment        = var.environment
   github_org         = var.github_org
+  github_org_id      = var.github_org_id
   github_repo        = var.github_repo
+  github_repo_id     = var.github_repo_id
+  github_environment = var.github_environment
   ecr_repository_arn = module.ecr.repository_arn
+
+  region                     = var.region
+  ecs_cluster_arn            = module.ecs.cluster_arn
+  ecs_cluster_name           = module.ecs.cluster_name
+  ecs_task_definition_family = module.ecs.task_definition_family
+  ecs_pass_role_arns         = [module.ecs.task_execution_role_arn, module.ecs.task_role_arn]
+  ecs_log_group_arn          = module.ecs.log_group_arn
 }
 
 module "eventbridge" {

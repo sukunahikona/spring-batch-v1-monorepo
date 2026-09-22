@@ -7,13 +7,7 @@ on:
     paths:
       - 'apps/spring-batch-app-v1/**'
       - '.github/workflows/**'
-  # main へのマージ時にECRへプッシュする
-  push:
-    branches: [ main ]
-    paths:
-      - 'apps/spring-batch-app-v1/**'
-      - '.github/workflows/**'
-  # 手動実行
+  # 手動実行（「Run workflow」でブランチを選んで、ECRへプッシュまで実行する）
   workflow_dispatch:
 
 permissions:

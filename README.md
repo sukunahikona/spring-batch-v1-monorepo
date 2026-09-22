@@ -23,19 +23,35 @@ Spring Batch アプリケーションと、それを AWS（ECS Fargate + EventBr
 
 GitHub Actions のワークフローはリポジトリルートの `.github/workflows/` に置いています。
 
-| ワークフロー | 役割 |
-|---|---|
-| `prod-deployment.yml` | エントリーポイント。PR ではテストとビルドまで、`main` への push と手動実行では ECR プッシュまで実行（対象は `apps/spring-batch-app-v1/**` と `.github/workflows/**` の変更時） |
-| `unit-test.yml` | ユニットテスト（再利用ワークフロー） |
-| `build.yml` | Docker イメージのビルド（再利用ワークフロー） |
-| `push.yml` | OIDC 認証で ECR へプッシュ（再利用ワークフロー） |
+| ワークフロー | 起動 | 内容 |
+|---|---|---|
+| `prod-deployment.yml` | PR / 手動 | PR ではテストとビルドまで。手動実行では、選んだブランチでテスト → ビルド → ECR プッシュまで実行 |
+| `db-init.yml` | 手動 | VPC 内で ECS の単発タスクを起動し、`sql/schema.sql` で RDS にテーブルを作成する（データは投入しない。繰り返し実行しても安全） |
+| `unit-test.yml` / `build.yml` / `push.yml` | 他のワークフローから呼び出し | ユニットテスト / Docker イメージのビルド / OIDC 認証で ECR へプッシュ |
+
+### 手動実行のしかた
+GitHub の **Actions** タブで対象のワークフローを選び、**Run workflow** で**実行するブランチを選択**して実行します。
+
+### AWS への認証（GitHub Environments + OIDC）
+AWS に触れるジョブ（ECR プッシュ、DB 初期化）は、GitHub の Environment `prod` を使って実行します。
+IAM ロールの信頼ポリシーは、次の条件に一致するジョブだけを許可しています。
+
+```
+repo:sukunahikona@<オーナーID>/spring-batch-v1-monorepo@<リポジトリID>:environment:prod
+```
+
+- Environment を使わないジョブ（PR のジョブなど）は、AWS のロールを引き受けられません。
+- ブランチに関係なく Environment `prod` を使えるため、**どのブランチから実行できるかは GitHub の Environment 設定で制御します**（Settings → Environments → prod → Deployment branches and tags、必要なら Required reviewers）。
+- Environment `prod` は、ワークフローの初回実行時に自動作成されます（保護ルールは未設定の状態）。
+- オーナーIDとリポジトリIDは、OIDC トークンの `sub` に含まれる不変の数値です（`infra/individual/env/prod/terraform.tfvars`）。
+
+ロールの権限は、ECR への push と、単発の ECS タスクの起動・確認に限定しています。
 
 ### 初期設定
 
 1. `infra/common/env/prod/bootstrap` → `infra/common/env/prod` → `infra/individual/env/prod` の順に `terraform apply`
-2. individual スタックの出力 `github_actions_role_arn` を、`.github/workflows/prod-deployment.yml` の `aws_deploy_role_arn` に記載する（ロールARNは秘密情報ではないため、シークレット登録は不要）
-
-IAM ロールの信頼ポリシーは `infra/individual/env/prod/terraform.tfvars` の `github_org` / `github_repo`（= 本リポジトリ）に紐づきます。
+2. individual スタックの出力 `github_actions_role_arn` を、`.github/workflows/` 内の `role-to-assume` / `aws_deploy_role_arn` に記載する（ロール ARN は秘密情報ではないため、シークレット登録は不要）
+3. 手動で `DB Init` を実行してテーブルを作成し、`Prod Deployment` を実行してイメージを ECR にプッシュする
 
 ## Slack 通知
 

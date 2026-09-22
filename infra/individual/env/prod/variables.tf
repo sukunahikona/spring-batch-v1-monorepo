@@ -36,3 +36,18 @@ variable "batch_schedule_state" {
   type        = string
   default     = "ENABLED"
 }
+
+variable "github_org_id" {
+  description = "GitHub organization or user numeric ID (OIDCトークンのsubに含まれる不変ID)"
+  type        = string
+}
+
+variable "github_repo_id" {
+  description = "GitHub repository numeric ID (OIDCトークンのsubに含まれる不変ID)"
+  type        = string
+}
+
+variable "github_environment" {
+  description = "GitHub Environments の名前（デプロイ用ワークフローのジョブで environment: に指定する名前）"
+  type        = string
+}

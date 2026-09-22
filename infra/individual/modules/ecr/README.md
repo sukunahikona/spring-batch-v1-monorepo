@@ -21,8 +21,8 @@
 
 ### 2. GitHub Actions でプッシュ
 
-`.github/workflows/prod-deployment.yml` が、テスト → ビルド → ECR プッシュを実行します（PR ではテストとビルドまで。プッシュは `main` への push と手動実行のとき）。
-AWS への認証に使うロールの ARN は、ワークフロー内の `aws_deploy_role_arn` に記載しています（individual スタックの出力 `github_actions_role_arn` と同じ値）。
+`.github/workflows/prod-deployment.yml` を、Actions タブの **Run workflow** でブランチを選んで手動実行します（テスト → ビルド → ECR プッシュ。PR ではテストとビルドまで）。
+AWS への認証は GitHub Environments（`prod`）と OIDC で行います。ロールの ARN はワークフロー内の `aws_deploy_role_arn` に記載しています（individual スタックの出力 `github_actions_role_arn` と同じ値）。
 
 ### 3. コマンドで手動プッシュ
 

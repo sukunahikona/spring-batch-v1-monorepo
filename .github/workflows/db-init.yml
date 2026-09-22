@@ -1,0 +1,91 @@
+name: DB Init
+
+# RDS はプライベートサブネットにありGitHubのランナーから届かないため、
+# VPC内でECSの単発タスクを起動して、イメージ内の sql/schema.sql を適用する。
+# schema.sql は CREATE ... IF NOT EXISTS のため、繰り返し実行しても安全（データは投入しない）。
+on:
+  # 手動実行（「Run workflow」でブランチを選んで実行する）
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECS_CLUSTER: spring-batch-v1-prod-cluster
+  TASK_DEFINITION: spring-batch-v1-prod-spring-batch
+  CONTAINER_NAME: spring-batch-app
+  LOG_GROUP: /ecs/spring-batch-v1-prod-spring-batch
+  PROJECT_ENV: spring-batch-v1-prod
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    # AWSの信頼ポリシーは、この Environment を使うジョブだけを許可している
+    environment: prod
+
+    steps:
+      - name: AWS 認証（OIDC）
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # ロールのARNは秘密情報ではない（OIDCの信頼ポリシーで呼び出し元を制限している）
+          role-to-assume: arn:aws:iam::217117561102:role/spring-batch-v1-prod-github-actions-spring-batch
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: スキーマ投入タスクを起動して完了を待つ
+        run: |
+          set -euo pipefail
+
+          # 起動先のネットワーク（Terraformで作成済みのプライベートサブネットとSG）を名前から引く
+          SUBNETS=$(aws ec2 describe-subnets \
+            --filters "Name=tag:Name,Values=${PROJECT_ENV}-private-*" \
+            --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=${PROJECT_ENV}-ecs-task-sg" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+          echo "subnets=${SUBNETS} sg=${SG}"
+
+          # ジョブは実行せず（SPRING_BATCH_JOB_ENABLED=false）、起動時のSQL初期化(schema.sqlのみ)だけ実行する
+          RESULT=$(aws ecs run-task \
+            --cluster "${ECS_CLUSTER}" \
+            --task-definition "${TASK_DEFINITION}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SG}],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides":[{"name":"'"${CONTAINER_NAME}"'","environment":[
+              {"name":"SPRING_SQL_INIT_MODE","value":"always"},
+              {"name":"SPRING_SQL_INIT_SCHEMA_LOCATIONS","value":"classpath:sql/schema.sql"},
+              {"name":"SPRING_BATCH_JOB_ENABLED","value":"false"}]}]}')
+
+          TASK_ARN=$(echo "${RESULT}" | jq -r '.tasks[0].taskArn // empty')
+          if [ -z "${TASK_ARN}" ]; then
+            echo "::error::タスクを起動できませんでした"
+            echo "${RESULT}" | jq '.failures'
+            exit 1
+          fi
+          TASK_ID="${TASK_ARN##*/}"
+          echo "TASK_ID=${TASK_ID}" >> "$GITHUB_ENV"
+          echo "起動しました: ${TASK_ARN}"
+
+          aws ecs wait tasks-stopped --cluster "${ECS_CLUSTER}" --tasks "${TASK_ARN}"
+
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "${ECS_CLUSTER}" --tasks "${TASK_ARN}" \
+            --query "tasks[0].containers[?name=='${CONTAINER_NAME}'] | [0].exitCode" --output text)
+          echo "EXIT_CODE=${EXIT_CODE}" >> "$GITHUB_ENV"
+          echo "終了コード: ${EXIT_CODE}"
+
+      - name: タスクのログを表示
+        if: always() && env.TASK_ID != ''
+        run: |
+          aws logs get-log-events \
+            --log-group-name "${LOG_GROUP}" \
+            --log-stream-name "ecs/${CONTAINER_NAME}/${TASK_ID}" \
+            --limit 60 --query 'events[].message' --output text || true
+
+      - name: 結果を判定
+        run: |
+          if [ "${EXIT_CODE:-}" != "0" ]; then
+            echo "::error::スキーマ投入に失敗しました (exitCode=${EXIT_CODE:-不明})"
+            exit 1
+          fi
+          echo "スキーマ投入が完了しました"
