@@ -1,7 +1,14 @@
-name: Unit Test
+name: CI
 
+# JUnit テスト。PR の作成時と、その PR ブランチへのコミット時に実行する。
+# deploy.yml からも呼び出される（デプロイ前のテスト）。
 on:
+  pull_request:
+    types: [ opened, synchronize, reopened ]
   workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   test:

@@ -21,19 +21,25 @@ Spring Batch アプリケーションと、それを AWS（ECS Fargate + EventBr
 
 ## CI/CD
 
-GitHub Actions のワークフローはリポジトリルートの `.github/workflows/` に置いています。
+GitHub Actions のワークフローは、リポジトリルートの `.github/workflows/` に2ファイルだけ置いています。
 
 | ワークフロー | 起動 | 内容 |
 |---|---|---|
-| `prod-deployment.yml` | PR / 手動 | PR ではテストとビルドまで。手動実行では、選んだブランチでテスト → ビルド → ECR プッシュまで実行 |
-| `db-init.yml` | 手動 | VPC 内で ECS の単発タスクを起動し、`sql/schema.sql` で RDS にテーブルを作成する（データは投入しない。繰り返し実行しても安全） |
-| `unit-test.yml` / `build.yml` / `push.yml` | 他のワークフローから呼び出し | ユニットテスト / Docker イメージのビルド / OIDC 認証で ECR へプッシュ |
+| `ci.yml` | PR の作成時、およびその PR ブランチへのコミット時 | JUnit のテスト。`deploy.yml` からも再利用される |
+| `deploy.yml` | 手動（ブランチを選んで実行） | イメージのビルド → ECR プッシュ、DB 初期化（実行内容はチェックボックスで選択） |
 
-### 手動実行のしかた
-GitHub の **Actions** タブで対象のワークフローを選び、**Run workflow** で**実行するブランチを選択**して実行します。
+### `deploy.yml` の実行のしかた
+GitHub の **Actions** タブで **Deploy** を選び、**Run workflow** で**実行するブランチ**と**実行内容**を選んで実行します。
+
+| 入力 | 既定値 | 内容 |
+|---|---|---|
+| `push_image` | ON | テスト（`ci.yml`）→ Docker イメージのビルド → ECR へプッシュ（コミットSHAと `latest` のタグ） |
+| `init_db` | OFF | VPC 内で ECS の単発タスクを起動し、`sql/schema.sql` で RDS にテーブルを作成する（データは投入しない。繰り返し実行しても安全） |
+
+両方を選んだ場合は、イメージのプッシュ後に DB 初期化を実行します。RDS はプライベートサブネットにあり GitHub のランナーから届かないため、DB 初期化は ECS の単発タスクとして実行しています。
 
 ### AWS への認証（GitHub Environments + OIDC）
-AWS に触れるジョブ（ECR プッシュ、DB 初期化）は、GitHub の Environment `prod` を使って実行します。
+AWS に触れるジョブ（`deploy.yml` の `push-image`、`init-db`）は、GitHub の Environment `prod` を使って実行します。
 IAM ロールの信頼ポリシーは、次の条件に一致するジョブだけを許可しています。
 
 ```
@@ -50,8 +56,8 @@ repo:sukunahikona@<オーナーID>/spring-batch-v1-monorepo@<リポジトリID>:
 ### 初期設定
 
 1. `infra/common/env/prod/bootstrap` → `infra/common/env/prod` → `infra/individual/env/prod` の順に `terraform apply`
-2. individual スタックの出力 `github_actions_role_arn` を、`.github/workflows/` 内の `role-to-assume` / `aws_deploy_role_arn` に記載する（ロール ARN は秘密情報ではないため、シークレット登録は不要）
-3. 手動で `DB Init` を実行してテーブルを作成し、`Prod Deployment` を実行してイメージを ECR にプッシュする
+2. individual スタックの出力 `github_actions_role_arn` を、`.github/workflows/deploy.yml` の `AWS_ROLE_ARN` に記載する（ロール ARN は秘密情報ではないため、シークレット登録は不要）
+3. 手動で `Deploy` を実行する（`push_image` でイメージを ECR にプッシュし、`init_db` でテーブルを作成する）
 
 ## Slack 通知
 
@@ -87,4 +93,4 @@ Terraform の `project`（`spring-batch-v1`）と `environment`（`prod`）か�
 - `infra/common/env/prod/bootstrap/terraform.tfvars` の `state_bucket_name`
 - 両スタックの `backend.tf` の `bucket`（Terraform の制約で変数化できない）
 - `infra/individual/modules/ecr/push-to-ecr.sh` の `PROJECT`
-- `.github/workflows/prod-deployment.yml` の `ecr_repository`
+- `.github/workflows/deploy.yml` の `env`（`ECR_REPOSITORY`、`ECS_CLUSTER`、`TASK_DEFINITION`、`LOG_GROUP`、`PROJECT_ENV`）

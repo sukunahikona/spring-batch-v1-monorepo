@@ -21,8 +21,8 @@
 
 ### 2. GitHub Actions でプッシュ
 
-`.github/workflows/prod-deployment.yml` を、Actions タブの **Run workflow** でブランチを選んで手動実行します（テスト → ビルド → ECR プッシュ。PR ではテストとビルドまで）。
-AWS への認証は GitHub Environments（`prod`）と OIDC で行います。ロールの ARN はワークフロー内の `aws_deploy_role_arn` に記載しています（individual スタックの出力 `github_actions_role_arn` と同じ値）。
+`.github/workflows/deploy.yml` を、Actions タブの **Run workflow** でブランチを選んで手動実行します（`push_image` を ON。テスト → ビルド → ECR プッシュ）。
+AWS への認証は GitHub Environments（`prod`）と OIDC で行います。ロールの ARN はワークフロー内の `AWS_ROLE_ARN` に記載しています（individual スタックの出力 `github_actions_role_arn` と同じ値）。
 
 ### 3. コマンドで手動プッシュ
 

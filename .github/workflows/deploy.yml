@@ -1,36 +1,99 @@
-name: DB Init
+name: Deploy
 
-# RDS はプライベートサブネットにありGitHubのランナーから届かないため、
-# VPC内でECSの単発タスクを起動して、イメージ内の sql/schema.sql を適用する。
-# schema.sql は CREATE ... IF NOT EXISTS のため、繰り返し実行しても安全（データは投入しない）。
+# 手動実行（「Run workflow」で実行するブランチを選ぶ）。実行内容はチェックボックスで選ぶ。
+#   - イメージのビルドと ECR へのプッシュ（テスト → ビルド → プッシュ）
+#   - DB 初期化（ECS の単発タスクで sql/schema.sql を適用。データは投入しない）
+# 両方を選んだ場合は、イメージのプッシュ後に DB 初期化を実行する。
 on:
-  # 手動実行（「Run workflow」でブランチを選んで実行する）
   workflow_dispatch:
+    inputs:
+      push_image:
+        description: 'イメージをビルドして ECR にプッシュする（テスト込み）'
+        type: boolean
+        default: true
+      init_db:
+        description: 'DB を初期化する（schema.sql の適用。繰り返し実行しても安全）'
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   AWS_REGION: ap-northeast-1
+  # ロールのARNは秘密情報ではない（OIDCの信頼ポリシーで呼び出し元を制限している）
+  AWS_ROLE_ARN: arn:aws:iam::217117561102:role/spring-batch-v1-prod-github-actions-spring-batch
+  PROJECT_ENV: spring-batch-v1-prod
+  ECR_REPOSITORY: spring-batch-v1-prod-spring-batch-app-v1
   ECS_CLUSTER: spring-batch-v1-prod-cluster
   TASK_DEFINITION: spring-batch-v1-prod-spring-batch
   CONTAINER_NAME: spring-batch-app
   LOG_GROUP: /ecs/spring-batch-v1-prod-spring-batch
-  PROJECT_ENV: spring-batch-v1-prod
 
 jobs:
-  schema:
+  ###############################################################################
+  # ユニットテスト（ci.yml を再利用）
+  ###############################################################################
+  test:
+    if: ${{ inputs.push_image }}
+    uses: ./.github/workflows/ci.yml
+
+  ###############################################################################
+  # Docker イメージのビルドと ECR へのプッシュ
+  ###############################################################################
+  push-image:
+    needs: test
+    if: ${{ inputs.push_image }}
     runs-on: ubuntu-latest
     # AWSの信頼ポリシーは、この Environment を使うジョブだけを許可している
     environment: prod
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Docker イメージのビルド
+        working-directory: apps/spring-batch-app-v1
+        run: docker build -f batch/Dockerfile -t "${ECR_REPOSITORY}:${GITHUB_SHA}" .
+
+      - name: AWS 認証（OIDC）
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ECR ログイン
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: ECR へプッシュ
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          for TAG in "${GITHUB_SHA}" latest; do
+            docker tag "${ECR_REPOSITORY}:${GITHUB_SHA}" "${ECR_REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+            docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+          done
+
+  ###############################################################################
+  # DB 初期化
+  # RDS はプライベートサブネットにありGitHubのランナーから届かないため、
+  # VPC内でECSの単発タスクを起動して、イメージ内の sql/schema.sql を適用する。
+  ###############################################################################
+  init-db:
+    needs: push-image
+    # push-image をスキップした場合も実行する（失敗・キャンセル時は実行しない）
+    if: ${{ always() && inputs.init_db && needs.push-image.result != 'failure' && needs.push-image.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    environment: prod
     steps:
       - name: AWS 認証（OIDC）
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # ロールのARNは秘密情報ではない（OIDCの信頼ポリシーで呼び出し元を制限している）
-          role-to-assume: arn:aws:iam::217117561102:role/spring-batch-v1-prod-github-actions-spring-batch
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: スキーマ投入タスクを起動して完了を待つ
