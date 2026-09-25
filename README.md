@@ -56,7 +56,12 @@ repo:sukunahikona@<オーナーID>/spring-batch-v1-monorepo@<リポジトリID>:
 ### 初期設定
 
 1. `infra/common/env/prod/bootstrap` → `infra/common/env/prod` → `infra/individual/env/prod` の順に `terraform apply`
-2. individual スタックの出力 `github_actions_role_arn` を、`.github/workflows/deploy.yml` の `AWS_ROLE_ARN` に記載する（ロール ARN は秘密情報ではないため、シークレット登録は不要）
+2. individual スタックの出力 `github_actions_role_arn` を、GitHub の Environment `prod` の Variables に `AWS_ROLE_ARN` として登録する（Settings → Environments → prod → Environment variables）。アカウント ID をリポジトリに書かないためで、秘密情報ではないため Secrets ではなく Variables で足りる
+
+```bash
+gh variable set AWS_ROLE_ARN --env prod --repo sukunahikona/spring-batch-v1-monorepo \
+  --body "$(cd infra/individual/env/prod && terraform output -raw github_actions_role_arn)"
+```
 3. 手動で `Deploy` を実行する（`push_image` でイメージを ECR にプッシュし、`init_db` でテーブルを作成する）
 
 ## Slack 通知
