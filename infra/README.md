@@ -16,7 +16,7 @@ infra/
 │       ├── iam/                     # OIDC Provider（GitHub Actions用）
 │       ├── rds/                     # RDS PostgreSQL（Multi-AZ）
 │       ├── s3/                      # S3バケット
-│       ├── ssm_parameter/           # SSM Parameter Store
+│       ├── ssm_parameter/           # SSM Parameter Store（RDS認証情報・Slack Webhook URL）
 │       └── vpc/                     # VPC・サブネット・NAT・Bastion
 │
 └── individual/                      # アプリ個別インフラ（ECR・ECS・EventBridgeなど）
@@ -25,7 +25,7 @@ infra/
         ├── ecr/                     # ECRリポジトリ（spring-batch-app-v1）
         ├── ecs/                     # ECSクラスタ・タスク定義・IAMロール・SG
         ├── eventbridge/             # EventBridge Schedulerによる定期実行
-        └── iam/                     # GitHub Actions用IAMロール（ECRプッシュ権限）
+        └── iam/                     # GitHub Actions用IAMロール（ECRプッシュ・ECS単発タスク実行権限）
 ```
 
 ---
@@ -41,7 +41,7 @@ graph TB
     subgraph AWS
         ECR[ECR\nspring-batch-app-v1]
         EBS[EventBridge Scheduler\nsampleJob / userFetchJob\n毎分実行]
-        SSM[SSM Parameter Store\nDB認証情報]
+        SSM[SSM Parameter Store\nDB認証情報 / Slack Webhook URL]
         CWL[CloudWatch Logs]
 
         subgraph VPC / プライベートサブネット ap-northeast-1a / 1c
@@ -51,12 +51,17 @@ graph TB
     end
 
     GHA -->|docker push| ECR
+    GHA -->|RunTask（DB初期化）| ECS
     EBS -->|RunTask| ECS
     ECS -->|イメージ取得| ECR
     ECS -->|認証情報取得| SSM
     ECS -->|DB接続| RDS
     ECS -->|ログ出力| CWL
+    ECS -->|開始・終了通知| SLACK[Slack\nIncoming Webhook]
 ```
+
+GitHub Actions は、GitHub Environments（`prod`）を使った OIDC 認証で IAM ロールを引き受けます。
+詳細は [ルートREADME](../README.md) の「CI/CD」を参照してください。
 
 ---
 
@@ -83,7 +88,7 @@ graph TB
 | NAT Gateway | パブリックサブネットに配置 |
 | Bastion | パブリックサブネットに配置（SSH踏み台） |
 | RDS PostgreSQL | `db.t3.micro`、Multi-AZ、暗号化有効、`springbatchdb` |
-| SSM Parameter Store | RDS認証情報（`/spring-batch-v1/prod/rds/username`, `password`） |
+| SSM Parameter Store | RDS認証情報（`/spring-batch-v1/prod/rds/username`, `password`）とSlack Webhook URL（`/spring-batch-v1/prod/slack/webhook_url`）。`bootstrap` で作成し、値は初回作成後にConsoleやCLIで更新する |
 
 ### individual スタック
 
@@ -93,7 +98,7 @@ graph TB
 | ECS クラスタ | `spring-batch-v1-prod-cluster`（Fargate、Container Insights有効） |
 | ECS タスク定義 | `spring-batch-v1-prod-spring-batch`（CPU: 512、Memory: 1024） |
 | EventBridge Scheduler | `sampleJob`・`userFetchJob` を毎分実行（`batch_schedule_state` で停止可能） |
-| IAM（GitHub Actions） | OIDC経由でECRプッシュ権限を付与 |
+| IAM（GitHub Actions） | OIDC経由（Environment `prod` のジョブのみ許可）で、ECRプッシュ権限と、ECS単発タスクの起動・確認権限（DB初期化用）を付与 |
 
 ---
 
