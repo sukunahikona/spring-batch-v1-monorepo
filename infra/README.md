@@ -24,6 +24,7 @@ infra/
     └── modules/
         ├── ecr/                     # ECRリポジトリ（spring-batch-app-v1）
         ├── ecs/                     # ECSクラスタ・タスク定義・IAMロール・SG
+        ├── ecs_alert/               # ECSタスク異常終了の検知（EventBridge + Lambda → Slack）
         ├── eventbridge/             # EventBridge Schedulerによる定期実行
         └── iam/                     # GitHub Actions用IAMロール（ECRプッシュ・ECS単発タスク実行権限）
 ```
@@ -58,6 +59,9 @@ graph TB
     ECS -->|DB接続| RDS
     ECS -->|ログ出力| CWL
     ECS -->|開始・終了通知| SLACK[Slack\nIncoming Webhook]
+    ECS -.->|Task State Change| EVR[EventBridge Rule\n異常終了のみ]
+    EVR --> LMB[Lambda\nメッセージ整形]
+    LMB -->|異常通知| SLACK
 ```
 
 GitHub Actions は、GitHub Environments（`prod`）を使った OIDC 認証で IAM ロールを引き受けます。
@@ -98,7 +102,29 @@ GitHub Actions は、GitHub Environments（`prod`）を使った OIDC 認証で 
 | ECS クラスタ | `spring-batch-v1-prod-cluster`（Fargate、Container Insights有効） |
 | ECS タスク定義 | `spring-batch-v1-prod-spring-batch`（CPU: 512、Memory: 1024） |
 | EventBridge Scheduler | `sampleJob`・`userFetchJob` を5分間隔で実行（`batch_schedule_state` で停止可能） |
+| ECSタスク異常検知 | EventBridge ルール（ECS Task State Change）と Lambda。異常終了したタスクを Slack へ通知（後述） |
 | IAM（GitHub Actions） | OIDC経由（Environment `prod` のジョブのみ許可）で、ECRプッシュ権限と、ECS単発タスクの起動・確認権限（DB初期化用）を付与 |
+
+---
+
+## ECSタスクの異常検知（Slack通知）
+
+対象クラスタ（`spring-batch-v1-prod-cluster`）のタスクが**異常終了**したときに、Slack へ通知します。
+アプリ内の通知（`SlackJobExecutionListener`）とは別の仕組みで、アプリが起動できなかった場合や、OOM・強制終了などでアプリ側から通知できない場合も検知できます。
+
+| 検知する条件 | 例 |
+|---|---|
+| コンテナの `exitCode` が 0 以外で `STOPPED` | アプリのクラッシュ、OOM（137） |
+| 起動失敗（`stopCode = TaskFailedToStart`） | イメージの取得失敗、シークレットの取得失敗 |
+
+正常終了（`exitCode = 0`）や実行中の状態変化は通知しません。
+
+通知内容: バッチ識別子（環境変数 `JOB_NAME` の上書き値）、タスク ID とタスク定義、停止コード、理由、コンテナごとの `exitCode`、ログの場所
+
+構成は `EventBridge ルール → Lambda（infra/individual/modules/ecs_alert/lambda/notify.py）→ Slack Incoming Webhook` です。
+Webhook URL は、アプリと同じ SSM の `/spring-batch-v1/prod/slack/webhook_url` を Lambda が実行時に読み込みます（未設定・`dummy` の場合は通知しません）。
+
+> **注意**: Spring Batch のジョブが `FAILED` で終わっても、アプリのプロセスが終了コード 0 で終わる場合は、この検知の対象になりません（その場合はアプリ内の通知が担当します）。
 
 ---
 

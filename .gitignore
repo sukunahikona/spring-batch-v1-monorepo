@@ -5,3 +5,6 @@
 .claude/settings.local.json
 tfplan
 *.tfplan
+
+# Lambda のデプロイ用に Terraform が生成する zip
+infra/**/lambda/*.zip
