@@ -137,8 +137,8 @@ EventBridge Scheduler の状態は、`infra/individual/env/prod/terraform.tfvars
 
 | 値 | 動作 |
 |---|---|
-| `ENABLED` | `sampleJob`・`userFetchJob` を5分間隔で実行する |
-| `DISABLED` | 定期実行を停止する（現在の設定） |
+| `ENABLED` | `sampleJob`・`userFetchJob` を5分間隔で実行する（現在の設定） |
+| `DISABLED` | 定期実行を停止する |
 
 ```bash
 cd infra/individual/env/prod
