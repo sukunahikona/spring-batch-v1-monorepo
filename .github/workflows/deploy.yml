@@ -26,8 +26,8 @@ concurrency:
 
 env:
   AWS_REGION: ap-northeast-1
-  # ロールのARNは秘密情報ではない（OIDCの信頼ポリシーで呼び出し元を制限している）
-  AWS_ROLE_ARN: arn:aws:iam::217117561102:role/spring-batch-v1-prod-github-actions-spring-batch
+  # AWSのロールARNは、GitHub Environment `prod` の Variables（AWS_ROLE_ARN）から参照する。
+  # アカウントIDをリポジトリに書かないため。値は Terraform の出力 github_actions_role_arn
   PROJECT_ENV: spring-batch-v1-prod
   ECR_REPOSITORY: spring-batch-v1-prod-spring-batch-app-v1
   ECS_CLUSTER: spring-batch-v1-prod-cluster
@@ -62,7 +62,7 @@ jobs:
       - name: AWS 認証（OIDC）
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: ECR ログイン
@@ -93,7 +93,7 @@ jobs:
       - name: AWS 認証（OIDC）
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: スキーマ投入タスクを起動して完了を待つ

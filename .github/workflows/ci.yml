@@ -48,3 +48,5 @@ jobs:
         with:
           name: test-results
           path: apps/spring-batch-app-v1/build/reports/tests/test/
+          # 既定は90日。テストレポートは短期間見られれば十分なので14日で自動削除する
+          retention-days: 14
