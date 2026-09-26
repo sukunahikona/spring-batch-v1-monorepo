@@ -59,7 +59,7 @@ resource "aws_scheduler_schedule" "sample_job" {
     mode = "OFF"
   }
 
-  schedule_expression          = "rate(5 minutes)"
+  schedule_expression          = "rate(1 hour)"
   schedule_expression_timezone = "Asia/Tokyo"
   state                        = var.schedule_state
 
@@ -106,7 +106,7 @@ resource "aws_scheduler_schedule" "user_fetch_job" {
     mode = "OFF"
   }
 
-  schedule_expression          = "rate(5 minutes)"
+  schedule_expression          = "rate(1 hour)"
   schedule_expression_timezone = "Asia/Tokyo"
   state                        = var.schedule_state
 

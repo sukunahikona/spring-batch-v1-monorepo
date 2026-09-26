@@ -41,7 +41,7 @@ graph TB
 
     subgraph AWS
         ECR[ECR\nspring-batch-app-v1]
-        EBS[EventBridge Scheduler\nsampleJob / userFetchJob\n5分間隔で実行]
+        EBS[EventBridge Scheduler\nsampleJob / userFetchJob\n1時間に1回実行]
         SSM[SSM Parameter Store\nDB認証情報 / Slack Webhook URL]
         CWL[CloudWatch Logs]
 
@@ -100,7 +100,7 @@ GitHub Actions は、GitHub Environments（`prod`）を使った OIDC 認証で 
 | ECR | `spring-batch-v1-prod-spring-batch-app-v1`（最新30イメージ保持） |
 | ECS クラスタ | `spring-batch-v1-prod-cluster`（Fargate、Container Insights有効） |
 | ECS タスク定義 | `spring-batch-v1-prod-spring-batch`（CPU: 512、Memory: 1024） |
-| EventBridge Scheduler | `sampleJob`・`userFetchJob` を5分間隔で実行（`batch_schedule_state` で停止可能） |
+| EventBridge Scheduler | `sampleJob`・`userFetchJob` を1時間に1回実行（`batch_schedule_state` で停止可能） |
 | ECSタスク異常検知 | EventBridge ルール（ECS Task State Change）と API destination。起動失敗・異常終了したタスクを Slack へ通知（後述） |
 | IAM（GitHub Actions） | OIDC経由（Environment `prod` のジョブのみ許可）で、ECRプッシュ権限と、ECS単発タスクの起動・確認権限（DB初期化用）を付与 |
 
@@ -137,7 +137,7 @@ EventBridge Scheduler の状態は、`infra/individual/env/prod/terraform.tfvars
 
 | 値 | 動作 |
 |---|---|
-| `ENABLED` | `sampleJob`・`userFetchJob` を5分間隔で実行する（現在の設定） |
+| `ENABLED` | `sampleJob`・`userFetchJob` を1時間に1回実行する（現在の設定） |
 | `DISABLED` | 定期実行を停止する |
 
 ```bash
