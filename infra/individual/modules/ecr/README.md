@@ -12,19 +12,12 @@
 
 イメージのビルドと ECR へのプッシュは、次のいずれかで行います。
 
-### 1. スクリプトで手動プッシュ
-
-```bash
-# monorepoルートから実行（AWS認証済みであること）
-./infra/individual/modules/ecr/push-to-ecr.sh [イメージタグ]
-```
-
-### 2. GitHub Actions でプッシュ
+### 1. GitHub Actions でプッシュ（通常はこちら）
 
 `.github/workflows/deploy.yml` を、Actions タブの **Run workflow** でブランチを選んで手動実行します（`push_image` を ON。テスト → ビルド → ECR プッシュ）。
-AWS への認証は GitHub Environments（`prod`）と OIDC で行います。ロールの ARN はワークフロー内の `AWS_ROLE_ARN` に記載しています（individual スタックの出力 `github_actions_role_arn` と同じ値）。
+AWS への認証は GitHub Environments（`prod`）と OIDC で行います。ロールの ARN は、Environment `prod` の Variables `AWS_ROLE_ARN` に登録しています（individual スタックの出力 `github_actions_role_arn` と同じ値）。
 
-### 3. コマンドで手動プッシュ
+### 2. コマンドで手動プッシュ
 
 ```bash
 # ECR にログイン

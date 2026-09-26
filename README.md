@@ -97,5 +97,4 @@ Terraform の `project`（`spring-batch-v1`）と `environment`（`prod`）か�
 - `infra/common/env/prod/terraform.tfvars` / `infra/individual/env/prod/terraform.tfvars` / `infra/common/env/prod/bootstrap/terraform.tfvars` の `project`
 - `infra/common/env/prod/bootstrap/terraform.tfvars` の `state_bucket_name`
 - 両スタックの `backend.tf` の `bucket`（Terraform の制約で変数化できない）
-- `infra/individual/modules/ecr/push-to-ecr.sh` の `PROJECT`
 - `.github/workflows/deploy.yml` の `env`（`ECR_REPOSITORY`、`ECS_CLUSTER`、`TASK_DEFINITION`、`LOG_GROUP`、`PROJECT_ENV`）
