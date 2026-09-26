@@ -1,37 +1,52 @@
 ###############################################################################
-# ECS タスクの異常終了を Slack へ通知する
-#   EventBridge（ECS Task State Change）→ Lambda（メッセージ整形）→ Slack Incoming Webhook
-# Webhook URL は SSM Parameter Store（SecureString）から Lambda が実行時に読み込む
+# ECS タスクの起動失敗・異常終了を Slack へ通知する
+#   EventBridge ルール（ECS Task State Change）→ API destination → Slack Incoming Webhook
+# 起動後のジョブの例外はアプリ側（SlackJobExecutionListener）が通知する。
+# ここでは、アプリが通知できない「起動失敗」や「起動直後のクラッシュ」を拾う。
 ###############################################################################
-data "aws_caller_identity" "current" {}
+
+# Slack の Webhook URL（アプリと同じ SSM パラメータ）。
+# API destination のエンドポイントとして渡すため、tfstate に含まれる（state の S3 は閲覧者を限定している）
+data "aws_ssm_parameter" "slack_webhook_url" {
+  name            = "/${var.project}/${var.environment}/slack/webhook_url"
+  with_decryption = true
+}
 
 locals {
-  name             = "${var.project}-${var.environment}-ecs-task-alert"
-  webhook_ssm_name = "/${var.project}/${var.environment}/slack/webhook_url"
-  webhook_ssm_arn  = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter${local.webhook_ssm_name}"
-  lambda_log_group = "/aws/lambda/${local.name}"
+  name = "${var.project}-${var.environment}-ecs-task-alert"
 }
 
 ###############################################################################
-# Lambda
+# API destination（Slack Incoming Webhook）
 ###############################################################################
-data "archive_file" "notify" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/notify.py"
-  output_path = "${path.module}/lambda/notify.zip"
-}
+# Slack の Webhook は認証不要だが、API destination には Connection が必須のためダミーのキーを設定する
+resource "aws_cloudwatch_event_connection" "slack" {
+  name               = "${local.name}-slack"
+  description        = "Slack Incoming Webhook（認証不要のためダミーのキー）"
+  authorization_type = "API_KEY"
 
-resource "aws_cloudwatch_log_group" "lambda" {
-  name              = local.lambda_log_group
-  retention_in_days = 30
-
-  tags = {
-    Name = local.lambda_log_group
+  auth_parameters {
+    api_key {
+      key   = "x-dummy"
+      value = "dummy"
+    }
   }
 }
 
-resource "aws_iam_role" "lambda" {
-  name = "${local.name}-lambda-role"
+resource "aws_cloudwatch_event_api_destination" "slack" {
+  name                             = "${local.name}-slack"
+  description                      = "ECSタスクの異常をSlackへ通知する"
+  connection_arn                   = aws_cloudwatch_event_connection.slack.arn
+  invocation_endpoint              = data.aws_ssm_parameter.slack_webhook_url.value
+  http_method                      = "POST"
+  invocation_rate_limit_per_second = 5
+}
+
+###############################################################################
+# EventBridge が API destination を呼び出すための IAM ロール
+###############################################################################
+resource "aws_iam_role" "eventbridge" {
+  name = "${local.name}-eventbridge-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -39,7 +54,7 @@ resource "aws_iam_role" "lambda" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "events.amazonaws.com"
         }
         Action = "sts:AssumeRole"
       }
@@ -47,68 +62,36 @@ resource "aws_iam_role" "lambda" {
   })
 
   tags = {
-    Name = "${local.name}-lambda-role"
+    Name = "${local.name}-eventbridge-role"
   }
 }
 
-resource "aws_iam_role_policy" "lambda" {
-  name = "${local.name}-lambda-policy"
-  role = aws_iam_role.lambda.id
+resource "aws_iam_role_policy" "eventbridge" {
+  name = "${local.name}-eventbridge-policy"
+  role = aws_iam_role.eventbridge.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        # 自身のロググループへの出力のみ
         Effect   = "Allow"
-        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-        Resource = "${aws_cloudwatch_log_group.lambda.arn}:*"
-      },
-      {
-        # Slack の Webhook URL の読み取りのみ（SecureString は AWS 管理キーで復号される）
-        Effect   = "Allow"
-        Action   = "ssm:GetParameter"
-        Resource = local.webhook_ssm_arn
+        Action   = "events:InvokeApiDestination"
+        Resource = aws_cloudwatch_event_api_destination.slack.arn
       }
     ]
   })
 }
 
-resource "aws_lambda_function" "notify" {
-  function_name = local.name
-  description   = "ECSタスクの異常終了をSlackへ通知する"
-  role          = aws_iam_role.lambda.arn
-
-  runtime          = "python3.13"
-  handler          = "notify.handler"
-  filename         = data.archive_file.notify.output_path
-  source_code_hash = data.archive_file.notify.output_base64sha256
-  timeout          = 10
-  memory_size      = 128
-
-  environment {
-    variables = {
-      SLACK_WEBHOOK_SSM_PARAM = local.webhook_ssm_name
-      LOG_GROUP_NAME          = var.log_group_name
-      CONTAINER_NAME          = var.container_name
-    }
-  }
-
-  depends_on = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy.lambda]
-
-  tags = {
-    Name = local.name
-  }
-}
-
 ###############################################################################
-# EventBridge ルール（対象クラスタで異常終了したタスクのみ）
-#   - コンテナの exitCode が 0 以外で STOPPED
+# EventBridge ルール
+#   対象クラスタで、JOB_NAME を指定して起動したタスク（定期実行）のうち、
+#   - コンテナの exitCode が 0 以外で STOPPED（起動直後のクラッシュなど）
 #   - 起動に失敗（stopCode = TaskFailedToStart。イメージ取得失敗など）
+#   したものだけを対象にする。CI の DB 初期化タスク（JOB_NAME なし）は CI 側で失敗が分かるため対象外。
 ###############################################################################
 resource "aws_cloudwatch_event_rule" "task_failure" {
   name        = "${local.name}-rule"
-  description = "ECSタスクの異常終了（exitCode!=0 / 起動失敗）を検知する"
+  description = "ECSタスクの起動失敗・異常終了（exitCode!=0）を検知する"
 
   event_pattern = jsonencode({
     source        = ["aws.ecs"]
@@ -116,6 +99,11 @@ resource "aws_cloudwatch_event_rule" "task_failure" {
     detail = {
       clusterArn = [var.cluster_arn]
       lastStatus = ["STOPPED"]
+      overrides = {
+        containerOverrides = {
+          environment = { name = ["JOB_NAME"] }
+        }
+      }
       "$or" = [
         { containers = { exitCode = [{ "anything-but" = 0 }] } },
         { stopCode = ["TaskFailedToStart"] }
@@ -128,15 +116,30 @@ resource "aws_cloudwatch_event_rule" "task_failure" {
   }
 }
 
-resource "aws_cloudwatch_event_target" "notify" {
-  rule = aws_cloudwatch_event_rule.task_failure.name
-  arn  = aws_lambda_function.notify.arn
-}
+resource "aws_cloudwatch_event_target" "slack" {
+  rule     = aws_cloudwatch_event_rule.task_failure.name
+  arn      = aws_cloudwatch_event_api_destination.slack.arn
+  role_arn = aws_iam_role.eventbridge.arn
 
-resource "aws_lambda_permission" "eventbridge" {
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.notify.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.task_failure.arn
+  # 通知の失敗は、一定時間だけ再試行する
+  retry_policy {
+    maximum_retry_attempts       = 3
+    maximum_event_age_in_seconds = 3600
+  }
+
+  input_transformer {
+    # JOB_NAME は、定期実行の上書き設定（JOB_NAME のみ）の先頭にある前提で位置を指定している
+    input_paths = {
+      job      = "$.detail.overrides.containerOverrides[0].environment[0].value"
+      stopCode = "$.detail.stopCode"
+      reason   = "$.detail.stoppedReason"
+      exitCode = "$.detail.containers[0].exitCode"
+      taskArn  = "$.detail.taskArn"
+      time     = "$.time"
+    }
+
+    input_template = <<-EOT
+      {"text": ":rotating_light: ECSタスクの起動失敗・異常終了\n• バッチ: `<job>`\n• 停止コード: `<stopCode>`\n• exitCode: `<exitCode>`\n• 理由: <reason>\n• タスク: <taskArn>\n• 時刻: <time>\n• ログ: `${var.log_group_name}`"}
+    EOT
+  }
 }

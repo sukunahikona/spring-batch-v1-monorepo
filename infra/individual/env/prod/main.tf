@@ -69,9 +69,7 @@ module "ecs_alert" {
 
   project        = var.project
   environment    = var.environment
-  region         = var.region
   cluster_arn    = module.ecs.cluster_arn
-  container_name = "spring-batch-app"
   log_group_name = module.ecs.log_group_name
 }
 

@@ -8,18 +8,8 @@ variable "environment" {
   type        = string
 }
 
-variable "region" {
-  description = "AWS region"
-  type        = string
-}
-
 variable "cluster_arn" {
   description = "監視対象の ECS クラスタ ARN"
-  type        = string
-}
-
-variable "container_name" {
-  description = "バッチのコンテナ名（通知にログの場所を載せるため）"
   type        = string
 }
 
