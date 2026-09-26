@@ -64,6 +64,15 @@ module "eventbridge" {
   schedule_state             = var.batch_schedule_state
 }
 
+module "ecs_alert" {
+  source = "../../modules/ecs_alert"
+
+  project        = var.project
+  environment    = var.environment
+  cluster_arn    = module.ecs.cluster_arn
+  log_group_name = module.ecs.log_group_name
+}
+
 module "ecs" {
   source = "../../modules/ecs"
 

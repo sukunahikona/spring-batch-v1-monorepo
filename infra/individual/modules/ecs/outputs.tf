@@ -42,3 +42,8 @@ output "log_group_arn" {
   description = "CloudWatch Logs log group ARN for the batch task"
   value       = aws_cloudwatch_log_group.spring_batch.arn
 }
+
+output "log_group_name" {
+  description = "CloudWatch Logs log group name for the batch task"
+  value       = aws_cloudwatch_log_group.spring_batch.name
+}
