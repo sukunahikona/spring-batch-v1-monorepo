@@ -28,80 +28,42 @@ Terraform の定義に基づく構成を、「ネットワーク構成」と「�
 ```mermaid
 flowchart LR
     DEV["運用者"]
-    GHA["GitHub Actions<br/>(Environment: prod)"]
-    SLACK["Slack<br/>Incoming Webhook"]
+    EXT["ECR / Slack"]
 
-    subgraph AWS["AWS (ap-northeast-1)"]
-        subgraph VPC["VPC 10.0.0.0/16"]
-            IGW["Internet Gateway"]
-
-            subgraph PUB["パブリックサブネット x2 (1a / 1c)"]
-                BASTION["Bastion EC2<br/>t3.micro (SSH:22)"]
-                NAT["NAT Gateway"]
-            end
-
-            subgraph PRI["プライベートサブネット x2 (1a / 1c)"]
-                ECS["ECS Fargate タスク<br/>(パブリックIPなし)"]
-                RDS[("RDS PostgreSQL 16<br/>Multi-AZ :5432")]
-            end
+    subgraph VPC["VPC"]
+        subgraph PUB["パブリックサブネット"]
+            BASTION["Bastion"]
+            NAT["NAT Gateway"]
         end
-
-        S3["S3<br/>Terraform state"]
+        subgraph PRI["プライベートサブネット"]
+            ECS["ECS Fargate"]
+            RDS[("RDS<br/>Multi-AZ")]
+        end
     end
 
-    DEV -->|SSH| IGW
-    IGW --> BASTION
-    BASTION -->|5432| RDS
-    ECS -->|5432| RDS
-    ECS -->|外向き通信| NAT
-    NAT --> IGW
-    IGW -->|"ECR取得 / Slack通知"| EXT["ECR / Slack"]
-    GHA -.->|OIDC + docker push / RunTask| IGW
+    DEV -->|SSH| BASTION
+    BASTION --> RDS
+    ECS --> RDS
+    ECS --> NAT --> EXT
 ```
 
-- ECS タスクと RDS はプライベートサブネットに置き、外部への通信（ECR 取得・Slack 通知）は NAT Gateway を経由します。
-- RDS のセキュリティグループは、プライベートサブネットと Bastion からの 5432 を許可します。
+- ECS と RDS はプライベートサブネットに置き、外部への通信（ECR 取得・Slack 通知）は NAT Gateway を経由します。
 - Terraform の state は S3 に保存します（`bootstrap` で作成）。
 
 ### 処理の流れ
 
 ```mermaid
 flowchart LR
-    subgraph CICD["① デプロイ (手動実行)"]
-        GHA["GitHub Actions<br/>テスト → ビルド"]
-        ECR["ECR"]
-        GHA -->|"OIDC認証 / docker push"| ECR
-    end
-
-    subgraph RUN["② 定期実行"]
-        SCH["EventBridge Scheduler<br/>sampleJob / userFetchJob<br/>1時間に1回"]
-        ECS["ECS Fargate<br/>Spring Batch"]
-        SSM["SSM Parameter Store<br/>DB認証情報 / Webhook URL"]
-        RDS[("RDS PostgreSQL")]
-        CWL["CloudWatch Logs"]
-        SCH -->|RunTask| ECS
-        ECR -->|イメージ取得| ECS
-        SSM -->|認証情報| ECS
-        ECS -->|読み書き| RDS
-        ECS -->|ログ| CWL
-    end
-
-    subgraph NOTIFY["③ 通知"]
-        APP["アプリ内通知<br/>(ジョブの開始・終了・例外)"]
-        RULE["EventBridge Rule<br/>起動失敗 / exitCode≠0"]
-        APID["API destination"]
-        SLACK["Slack"]
-        APP -->|Webhook| SLACK
-        RULE --> APID -->|HTTPS POST| SLACK
-    end
-
-    GHA -.->|"RunTask (DB初期化)"| ECS
-    ECS --> APP
-    ECS -.->|Task State Change| RULE
+    GHA["GitHub Actions"] -->|push| ECR["ECR"]
+    SCH["EventBridge<br/>Scheduler<br/>(1時間に1回)"] -->|起動| ECS["ECS Fargate<br/>Spring Batch"]
+    ECR -->|イメージ| ECS
+    ECS --> RDS[("RDS")]
+    ECS -->|ジョブの結果| SLACK["Slack"]
+    ECS -.->|異常終了| RULE["EventBridge<br/>Rule"] -->|通知| SLACK
 ```
 
-- アプリ起動後の結果は、アプリ内の通知（`SlackJobExecutionListener`）が Slack に送ります。
-- イメージ取得失敗や起動直後のクラッシュなど、アプリが通知できない異常は、EventBridge ルールが検知して Slack に送ります（`JOB_NAME` を指定して起動したタスクのみ）。
+- ジョブの開始・終了・例外は、アプリが Slack に通知します。
+- イメージ取得失敗や起動直後のクラッシュなど、アプリが通知できない異常は、EventBridge ルールが検知して Slack に通知します。
 
 ## CI/CD
 
