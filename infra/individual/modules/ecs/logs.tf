@@ -38,7 +38,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "batch_logs" {
 #   CloudWatch Logs への出力は、タスク定義の logConfiguration から FireLens が生成する。
 ###############################################################################
 locals {
-  fluent_bit_s3_output_conf = templatefile("${path.module}/tasks/fluent-bit-s3-output.conf.tpl", {
+  fluent_bit_s3_output_conf = templatefile("${path.module}/tasks/conf/fluent-bit-s3-output.conf.tpl", {
     region = var.region
     bucket = aws_s3_bucket.batch_logs.id
   })
