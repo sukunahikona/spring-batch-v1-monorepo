@@ -1,32 +1,4 @@
 ###############################################################################
-# CloudWatch Log Group
-###############################################################################
-resource "aws_cloudwatch_log_group" "spring_batch" {
-  name              = "/ecs/${var.project}-${var.environment}-spring-batch"
-  retention_in_days = 30
-
-  tags = {
-    Name = "/ecs/${var.project}-${var.environment}-spring-batch"
-  }
-}
-
-###############################################################################
-# ECS クラスタ
-###############################################################################
-resource "aws_ecs_cluster" "this" {
-  name = "${var.project}-${var.environment}-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-
-  tags = {
-    Name = "${var.project}-${var.environment}-cluster"
-  }
-}
-
-###############################################################################
 # ECS タスク実行ロール（ECR pull・CloudWatch Logs書き込み・SSM取得）
 ###############################################################################
 resource "aws_iam_role" "ecs_task_execution" {
@@ -106,49 +78,48 @@ resource "aws_iam_role" "ecs_task" {
 }
 
 ###############################################################################
-# ECS タスク用セキュリティグループ
+# タスクロールの権限（Fluent Bit サイドカーのログ出力と、init による設定の取得。バケットは s3.tf）
 ###############################################################################
-resource "aws_security_group" "ecs_task" {
-  name        = "${var.project}-${var.environment}-ecs-task-sg"
-  description = "Security group for ECS Spring Batch tasks"
-  vpc_id      = var.vpc_id
+resource "aws_iam_policy" "ecs_task_logs" {
+  name        = "${var.project}-${var.environment}-ecs-task-logs-policy"
+  description = "Fluent Bit サイドカーが CloudWatch Logs と S3 にログを出力し、S3 から設定を取得するための権限"
 
-  # アウトバウンド（ECR pull・RDS接続・SSM・CloudWatch Logs）
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project}-${var.environment}-ecs-task-sg"
-  }
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+        ]
+        Resource = "${aws_cloudwatch_log_group.spring_batch.arn}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:AbortMultipartUpload",
+        ]
+        Resource = "${aws_s3_bucket.batch_logs.arn}/spring-batch/*"
+      },
+      {
+        # init プロセスが設定ファイルを取得する
+        Effect   = "Allow"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.batch_logs.arn}/fluent-bit/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = "s3:GetBucketLocation"
+        Resource = aws_s3_bucket.batch_logs.arn
+      },
+    ]
+  })
 }
 
-###############################################################################
-# ECS タスク定義（Spring Batch）
-###############################################################################
-resource "aws_ecs_task_definition" "spring_batch" {
-  family                   = "${var.project}-${var.environment}-spring-batch"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = var.batch_cluster.task_cpu
-  memory                   = var.batch_cluster.task_memory
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
-
-  container_definitions = templatefile("${path.module}/tasks/spring-batch.json.tpl", {
-    ecr_repository_url = var.ecr_repository_url
-    rds_endpoint       = var.rds_endpoint
-    db_name            = var.db_name
-    project            = var.project
-    environment        = var.environment
-    region             = var.region
-    log_group_name     = aws_cloudwatch_log_group.spring_batch.name
-  })
-
-  tags = {
-    Name = "${var.project}-${var.environment}-spring-batch"
-  }
+resource "aws_iam_role_policy_attachment" "ecs_task_logs" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.ecs_task_logs.arn
 }

@@ -88,6 +88,10 @@ resource "aws_iam_role_policy" "eventbridge" {
 #   - コンテナの exitCode が 0 以外で STOPPED（起動直後のクラッシュなど）
 #   - 起動に失敗（stopCode = TaskFailedToStart。イメージ取得失敗など）
 #   したものだけを対象にする。CI の DB 初期化タスク（JOB_NAME なし）は CI 側で失敗が分かるため対象外。
+#
+#   タスクには Fluent Bit のサイドカー（log_router）も同居する。EventBridge は配列内の特定要素だけを条件にできず、
+#   containers のどれかの exitCode が 0 以外であれば一致する。サイドカーは正常停止時に exitCode 0 で終わる前提で、
+#   通知文の exitCode は、先頭の要素（バッチのコンテナ spring-batch-app）から取り出している。
 ###############################################################################
 resource "aws_cloudwatch_event_rule" "task_failure" {
   name        = "${local.name}-rule"
@@ -133,6 +137,7 @@ resource "aws_cloudwatch_event_target" "slack" {
       job      = "$.detail.overrides.containerOverrides[0].environment[0].value"
       stopCode = "$.detail.stopCode"
       reason   = "$.detail.stoppedReason"
+      # containers[0] は spring-batch-app（タスク定義の先頭のコンテナ）
       exitCode = "$.detail.containers[0].exitCode"
       taskArn  = "$.detail.taskArn"
       time     = "$.time"
