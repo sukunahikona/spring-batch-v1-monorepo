@@ -62,7 +62,8 @@ infra/
 |---|---|
 | ECR | `spring-batch-v1-prod-spring-batch-app-v1`（最新30イメージ保持） |
 | ECS クラスタ | `spring-batch-v1-prod-cluster`（Fargate、Container Insights有効） |
-| ECS タスク定義 | `spring-batch-v1-prod-spring-batch`（CPU: 512、Memory: 1024） |
+| ECS タスク定義 | `spring-batch-v1-prod-spring-batch`（CPU: 512、Memory: 1024）。バッチ（`spring-batch-app`）と Fluent Bit のサイドカー（`log_router`）の2コンテナ構成 |
+| ログ | バッチのログは FireLens（Fluent Bit サイドカー）経由で、CloudWatch Logs（直近30日）と S3 `spring-batch-v1-prod-batch-logs-<アカウントID>`（保持期間は無期限）の両方に出力（後述） |
 | EventBridge Scheduler | `sampleJob`・`userFetchJob` を1時間に1回実行（`batch_schedule_state` で停止可能） |
 | ECSタスク異常検知 | EventBridge ルール（ECS Task State Change）と API destination。起動失敗・異常終了したタスクを Slack へ通知（後述） |
 | IAM（GitHub Actions） | OIDC経由（Environment `prod` のジョブのみ許可）で、ECRプッシュ権限と、ECS単発タスクの起動・確認権限（DB初期化用）を付与 |
@@ -91,6 +92,24 @@ Webhook URL は、アプリと同じ SSM の `/spring-batch-v1/prod/slack/webhoo
 > - Webhook URL は **tfstate に含まれ**、EventBridge のコンソールでも参照できます（state の S3 バケットとコンソールは、閲覧できるユーザーを限定している前提です）。
 > - SSM の値を更新したときは、`terraform apply` で反映します（初期値の `dummy` のままだと apply が失敗します）。
 > - `JOB_NAME` は、定期実行の上書き設定（`JOB_NAME` のみ）の先頭にある前提で、位置を指定して取り出しています。上書きする環境変数を増やす場合は、`ecs_alert` モジュールの `input_paths` を確認してください。
+
+---
+
+## ログの出力（Fluent Bit サイドカー）
+
+バッチのコンテナ（`spring-batch-app`）の標準出力は、同じタスク内の Fluent Bit（`log_router`、FireLens）が受け取り、2か所に出力します。
+
+| 出力先 | 保持期間 | 場所 |
+|---|---|---|
+| CloudWatch Logs | 30日 | `/ecs/spring-batch-v1-prod-spring-batch`（ストリーム: `ecs/spring-batch-app-firelens-<タスクID>`） |
+| S3 | 無期限（ライフサイクルルールなし） | `s3://spring-batch-v1-prod-batch-logs-<アカウントID>/spring-batch/<年>/<月>/<日>/...log.gz` |
+
+- `log_router` 自身のログは、同じロググループの `firelens/` ストリームに出力します。
+- Fargate では S3 上の設定ファイルを直接指定できないため、Fluent Bit の `init` イメージが、起動時に S3（`fluent-bit/s3-output.conf`）から追加設定（S3への出力）を取得します。CloudWatch Logs への出力は、タスク定義の `logConfiguration` から FireLens が生成します。
+- ログの出力に使う権限は、タスクロールに付けています（`ecs_task_logs` ポリシー）。
+
+### 異常検知との関係
+異常検知（上記）は、タスク内のいずれかのコンテナの `exitCode` が 0 以外のときに通知します。EventBridge は配列内の特定のコンテナだけを条件にできないため、`log_router` は正常停止時に `exitCode` 0 で終了する前提です。通知文の `exitCode` は、先頭のコンテナ（`spring-batch-app`）から取り出しています。
 
 ---
 

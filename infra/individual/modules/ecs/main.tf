@@ -146,6 +146,10 @@ resource "aws_ecs_task_definition" "spring_batch" {
     environment        = var.environment
     region             = var.region
     log_group_name     = aws_cloudwatch_log_group.spring_batch.name
+
+    # Fluent Bit サイドカー（init イメージが S3 の追加設定を取得する）
+    log_router_image         = var.log_router_image
+    fluent_bit_config_s3_arn = "${aws_s3_bucket.batch_logs.arn}/${aws_s3_object.fluent_bit_s3_output.key}"
   })
 
   tags = {

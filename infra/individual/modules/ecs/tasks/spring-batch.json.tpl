@@ -32,11 +32,40 @@
       }
     ],
     "logConfiguration": {
+      "logDriver": "awsfirelens",
+      "options": {
+        "Name": "cloudwatch_logs",
+        "region": "${region}",
+        "log_group_name": "${log_group_name}",
+        "log_stream_prefix": "ecs/",
+        "auto_create_group": "false"
+      }
+    }
+  },
+  {
+    "name": "log_router",
+    "image": "${log_router_image}",
+    "essential": true,
+    "memoryReservation": 64,
+    "stopTimeout": 60,
+    "environment": [
+      {
+        "name": "aws_fluent_bit_init_s3_1",
+        "value": "${fluent_bit_config_s3_arn}"
+      }
+    ],
+    "firelensConfiguration": {
+      "type": "fluentbit",
+      "options": {
+        "enable-ecs-log-metadata": "true"
+      }
+    },
+    "logConfiguration": {
       "logDriver": "awslogs",
       "options": {
         "awslogs-group": "${log_group_name}",
         "awslogs-region": "${region}",
-        "awslogs-stream-prefix": "ecs"
+        "awslogs-stream-prefix": "firelens"
       }
     }
   }
