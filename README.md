@@ -19,6 +19,52 @@ Spring Batch アプリケーションと、それを AWS（ECS Fargate + EventBr
 | アプリ | [apps/spring-batch-app-v1/README.md](apps/spring-batch-app-v1/README.md) |
 | インフラ | [infra/README.md](infra/README.md) |
 
+## アーキテクチャ
+
+Terraform の定義に基づく構成を、「ネットワーク構成」と「処理の流れ」の2つに分けて示します。
+
+### ネットワーク構成
+
+```mermaid
+flowchart LR
+    DEV["運用者"]
+    EXT["ECR / Slack"]
+
+    subgraph VPC["VPC"]
+        subgraph PUB["パブリックサブネット"]
+            BASTION["Bastion"]
+            NAT["NAT Gateway"]
+        end
+        subgraph PRI["プライベートサブネット"]
+            ECS["ECS Fargate"]
+            RDS[("RDS<br/>Multi-AZ")]
+        end
+    end
+
+    DEV -->|SSH| BASTION
+    BASTION --> RDS
+    ECS --> RDS
+    ECS --> NAT --> EXT
+```
+
+- ECS と RDS はプライベートサブネットに置き、外部への通信（ECR 取得・Slack 通知）は NAT Gateway を経由します。
+- Terraform の state は S3 に保存します（`bootstrap` で作成）。
+
+### 処理の流れ
+
+```mermaid
+flowchart LR
+    GHA["GitHub Actions"] -->|push| ECR["ECR"]
+    SCH["EventBridge<br/>Scheduler<br/>(1時間に1回)"] -->|起動| ECS["ECS Fargate<br/>Spring Batch"]
+    ECR -->|イメージ| ECS
+    ECS --> RDS[("RDS")]
+    ECS -->|ジョブの結果| SLACK["Slack"]
+    ECS -.->|異常終了| RULE["EventBridge<br/>Rule"] -->|通知| SLACK
+```
+
+- ジョブの開始・終了・例外は、アプリが Slack に通知します。
+- イメージ取得失敗や起動直後のクラッシュなど、アプリが通知できない異常は、EventBridge ルールが検知して Slack に通知します。
+
 ## CI/CD
 
 GitHub Actions のワークフローは、リポジトリルートの `.github/workflows/` に2ファイルだけ置いています。

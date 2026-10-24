@@ -14,4 +14,4 @@ batch_cluster = {
 }
 
 # EventBridge Scheduler による定期実行（ENABLED: 実行する / DISABLED: 停止する）
-batch_schedule_state = "DISABLED"
+batch_schedule_state = "ENABLED"
