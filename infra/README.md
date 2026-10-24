@@ -31,43 +31,6 @@ infra/
 
 ---
 
-## アーキテクチャ概要
-
-```mermaid
-graph TB
-    subgraph GitHub
-        GHA[GitHub Actions]
-    end
-
-    subgraph AWS
-        ECR[ECR\nspring-batch-app-v1]
-        EBS[EventBridge Scheduler\nsampleJob / userFetchJob\n1時間に1回実行]
-        SSM[SSM Parameter Store\nDB認証情報 / Slack Webhook URL]
-        CWL[CloudWatch Logs]
-
-        subgraph VPC / プライベートサブネット ap-northeast-1a / 1c
-            ECS[ECS Fargate\nspring-batch-v1-prod-cluster]
-            RDS[(RDS PostgreSQL\nMulti-AZ\nspringbatchdb)]
-        end
-    end
-
-    GHA -->|docker push| ECR
-    GHA -->|RunTask（DB初期化）| ECS
-    EBS -->|RunTask| ECS
-    ECS -->|イメージ取得| ECR
-    ECS -->|認証情報取得| SSM
-    ECS -->|DB接続| RDS
-    ECS -->|ログ出力| CWL
-    ECS -->|開始・終了通知| SLACK[Slack\nIncoming Webhook]
-    ECS -.->|Task State Change| EVR[EventBridge Rule\n異常終了のみ]
-    EVR -->|API destination| SLACK
-```
-
-GitHub Actions は、GitHub Environments（`prod`）を使った OIDC 認証で IAM ロールを引き受けます。
-詳細は [ルートREADME](../README.md) の「CI/CD」を参照してください。
-
----
-
 ## Terraformスタック構成
 
 本リポジトリは **2つの独立したTerraformスタック**で管理されています。
