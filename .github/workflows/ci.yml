@@ -16,12 +16,20 @@ jobs:
     defaults:
       run:
         working-directory: apps/spring-batch-app-v1
+    # Docker Hub の匿名 pull はレート制限に掛かりやすいため、認証して取得する
+    # （ユーザー名は Repository variables、トークンは Repository secrets に登録する）
     container:
-      image: public.ecr.aws/docker/library/gradle:jdk21
+      image: gradle:jdk21
+      credentials:
+        username: ${{ vars.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     services:
       postgres:
         image: postgres:16
+        credentials:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_DB: batchdb
           POSTGRES_USER: batchuser
