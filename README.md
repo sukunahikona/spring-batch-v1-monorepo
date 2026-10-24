@@ -108,7 +108,14 @@ repo:sukunahikona@<オーナーID>/spring-batch-v1-monorepo@<リポジトリID>:
 gh variable set AWS_ROLE_ARN --env prod --repo sukunahikona/spring-batch-v1-monorepo \
   --body "$(cd infra/individual/env/prod && terraform output -raw github_actions_role_arn)"
 ```
-3. 手動で `Deploy` を実行する（`push_image` でイメージを ECR にプッシュし、`init_db` でテーブルを作成する）
+3. テスト（`ci.yml`）が Docker Hub のイメージ（`gradle`・`postgres`）を認証して取得するため、リポジトリ全体の Variables / Secrets に Docker Hub の認証情報を登録する（Settings → Secrets and variables → Actions）。匿名の pull はレート制限に掛かりやすいためで、トークンは公開リポジトリの読み取り専用で足りる
+
+| 種別 | 名前 | 値 |
+|---|---|---|
+| Variable | `DOCKERHUB_USERNAME` | Docker Hub のユーザー名 |
+| Secret | `DOCKERHUB_TOKEN` | Docker Hub のアクセストークン（Read-only） |
+
+4. 手動で `Deploy` を実行する（`push_image` でイメージを ECR にプッシュし、`init_db` でテーブルを作成する）
 
 ## Slack 通知
 
