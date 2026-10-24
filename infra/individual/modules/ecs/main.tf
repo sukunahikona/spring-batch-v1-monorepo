@@ -106,6 +106,53 @@ resource "aws_iam_role" "ecs_task" {
 }
 
 ###############################################################################
+# タスクロールの権限（Fluent Bit サイドカーのログ出力と、init による設定の取得。バケットは s3.tf）
+###############################################################################
+resource "aws_iam_policy" "ecs_task_logs" {
+  name        = "${var.project}-${var.environment}-ecs-task-logs-policy"
+  description = "Fluent Bit サイドカーが CloudWatch Logs と S3 にログを出力し、S3 から設定を取得するための権限"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams",
+        ]
+        Resource = "${aws_cloudwatch_log_group.spring_batch.arn}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:AbortMultipartUpload",
+        ]
+        Resource = "${aws_s3_bucket.batch_logs.arn}/spring-batch/*"
+      },
+      {
+        # init プロセスが設定ファイルを取得する
+        Effect   = "Allow"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.batch_logs.arn}/fluent-bit/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = "s3:GetBucketLocation"
+        Resource = aws_s3_bucket.batch_logs.arn
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_logs" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.ecs_task_logs.arn
+}
+
+###############################################################################
 # ECS タスク用セキュリティグループ
 ###############################################################################
 resource "aws_security_group" "ecs_task" {
