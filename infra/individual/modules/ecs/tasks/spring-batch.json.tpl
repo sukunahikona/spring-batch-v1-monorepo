@@ -63,9 +63,9 @@
     "logConfiguration": {
       "logDriver": "awslogs",
       "options": {
-        "awslogs-group": "${log_group_name}",
+        "awslogs-group": "${fluent_bit_log_group_name}",
         "awslogs-region": "${region}",
-        "awslogs-stream-prefix": "firelens"
+        "awslogs-stream-prefix": "ecs"
       }
     }
   }

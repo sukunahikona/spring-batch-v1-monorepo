@@ -104,7 +104,7 @@ Webhook URL は、アプリと同じ SSM の `/spring-batch-v1/prod/slack/webhoo
 | CloudWatch Logs | 30日 | `/ecs/spring-batch-v1-prod-spring-batch`（ストリーム: `ecs/spring-batch-app-firelens-<タスクID>`） |
 | S3 | 無期限（ライフサイクルルールなし） | `s3://spring-batch-v1-prod-batch-logs-<アカウントID>/spring-batch/<年>/<月>/<日>/...log.gz` |
 
-- `log_router` 自身のログは、同じロググループの `firelens/` ストリームに出力します。
+- `log_router`（Fluent Bit）自身のログは、バッチのログとは別のロググループ `/ecs/spring-batch-v1-prod-fluent-bit`（保持期間30日、ストリーム: `ecs/log_router/<タスクID>`）に出力します。
 - Fargate では S3 上の設定ファイルを直接指定できないため、Fluent Bit の `init` イメージが、起動時に S3（`fluent-bit/s3-output.conf`）から追加設定（S3への出力）を取得します。CloudWatch Logs への出力は、タスク定義の `logConfiguration` から FireLens が生成します。
 - ログの出力に使う権限は、タスクロールに付けています（`ecs_task_logs` ポリシー）。
 

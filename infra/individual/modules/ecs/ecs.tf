@@ -11,6 +11,19 @@ resource "aws_cloudwatch_log_group" "spring_batch" {
 }
 
 ###############################################################################
+# CloudWatch Log Group（Fluent Bit サイドカー自身のログ）
+#   バッチのログとは分け、起動・転送のエラーなど Fluent Bit の運用ログだけを出力する。
+###############################################################################
+resource "aws_cloudwatch_log_group" "fluent_bit" {
+  name              = "/ecs/${var.project}-${var.environment}-fluent-bit"
+  retention_in_days = 30
+
+  tags = {
+    Name = "/ecs/${var.project}-${var.environment}-fluent-bit"
+  }
+}
+
+###############################################################################
 # ECS クラスタ
 ###############################################################################
 resource "aws_ecs_cluster" "this" {
@@ -60,13 +73,14 @@ resource "aws_ecs_task_definition" "spring_batch" {
   task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = templatefile("${path.module}/tasks/spring-batch.json.tpl", {
-    ecr_repository_url = var.ecr_repository_url
-    rds_endpoint       = var.rds_endpoint
-    db_name            = var.db_name
-    project            = var.project
-    environment        = var.environment
-    region             = var.region
-    log_group_name     = aws_cloudwatch_log_group.spring_batch.name
+    ecr_repository_url        = var.ecr_repository_url
+    rds_endpoint              = var.rds_endpoint
+    db_name                   = var.db_name
+    project                   = var.project
+    environment               = var.environment
+    region                    = var.region
+    log_group_name            = aws_cloudwatch_log_group.spring_batch.name
+    fluent_bit_log_group_name = aws_cloudwatch_log_group.fluent_bit.name
 
     # Fluent Bit サイドカー（init イメージが S3 の追加設定を取得する）
     log_router_image         = var.log_router_image
