@@ -46,6 +46,7 @@
     "name": "log_router",
     "image": "${log_router_image}",
     "essential": true,
+    "user": "0",
     "memoryReservation": 64,
     "stopTimeout": 60,
     "environment": [
