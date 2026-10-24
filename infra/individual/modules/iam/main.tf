@@ -58,7 +58,10 @@ resource "aws_iam_policy" "ecr_push" {
         Effect = "Allow"
         Action = [
           "ecr:BatchCheckLayerAvailability",
+          # docker push は、既存イメージの確認（マニフェストの HEAD）で BatchGetImage を使う
+          "ecr:BatchGetImage",
           "ecr:CompleteLayerUpload",
+          "ecr:GetDownloadUrlForLayer",
           "ecr:InitiateLayerUpload",
           "ecr:PutImage",
           "ecr:UploadLayerPart",
