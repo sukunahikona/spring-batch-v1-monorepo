@@ -48,8 +48,8 @@ docker compose build batch-app
 ```
 
 マルチステージビルドにより、以下の構成でイメージが作成されます：
-- ビルド環境: AWS ECR Public - Gradle (with JDK 21)
-- 実行環境: AWS ECR Public - Amazon Corretto 21
+- ビルド環境: Docker Hub - Gradle (with JDK 21)
+- 実行環境: Docker Hub - Amazon Corretto 21
 
 ## 実行方法
 
