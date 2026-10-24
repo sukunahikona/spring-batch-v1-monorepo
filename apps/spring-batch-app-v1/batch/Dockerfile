@@ -1,5 +1,5 @@
 # マルチステージビルド - Stage 1: ビルド環境
-FROM public.ecr.aws/docker/library/gradle:jdk21 AS builder
+FROM gradle:jdk21 AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY src ./src
 RUN gradle bootJar --no-daemon -x test
 
 # マルチステージビルド - Stage 2: 実行環境
-FROM public.ecr.aws/amazoncorretto/amazoncorretto:21
+FROM amazoncorretto:21
 
 WORKDIR /app
 

@@ -57,6 +57,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ベースイメージを Docker Hub から取得するため、匿名 pull のレート制限を避けて認証する
+      - name: Docker Hub ログイン
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Docker イメージのビルド
         working-directory: apps/spring-batch-app-v1
         run: docker build -f batch/Dockerfile -t "${ECR_REPOSITORY}:${GITHUB_SHA}" .
