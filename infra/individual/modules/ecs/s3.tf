@@ -8,6 +8,9 @@ resource "aws_s3_bucket" "batch_logs" {
   # バケット名はグローバルで一意にする必要があるため、アカウント ID を付ける
   bucket = "${var.project}-${var.environment}-batch-logs-${data.aws_caller_identity.current.account_id}"
 
+  # ログが残っていても terraform destroy で削除できるようにする（ログも一緒に消える）
+  force_destroy = true
+
   tags = {
     Name = "${var.project}-${var.environment}-batch-logs"
   }
