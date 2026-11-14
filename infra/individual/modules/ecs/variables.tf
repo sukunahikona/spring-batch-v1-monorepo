@@ -47,6 +47,12 @@ variable "batch_cluster" {
   })
 }
 
+variable "batch_logs_retention_days" {
+  description = "S3 に保管するバッチログ（spring-batch/ 配下）の保持日数"
+  type        = number
+  default     = 365
+}
+
 variable "log_router_image" {
   description = "Fluent Bit サイドカーのイメージ（S3 の設定を取得する init イメージ）"
   type        = string

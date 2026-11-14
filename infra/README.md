@@ -63,7 +63,7 @@ infra/
 | ECR | `spring-batch-v1-prod-spring-batch-app-v1`（最新30イメージ保持） |
 | ECS クラスタ | `spring-batch-v1-prod-cluster`（Fargate、Container Insights有効） |
 | ECS タスク定義 | `spring-batch-v1-prod-spring-batch`（CPU: 512、Memory: 1024）。バッチ（`spring-batch-app`）と Fluent Bit のサイドカー（`log_router`）の2コンテナ構成 |
-| ログ | バッチのログは FireLens（Fluent Bit サイドカー）経由で、CloudWatch Logs（直近30日）と S3 `spring-batch-v1-prod-batch-logs-<アカウントID>`（保持期間は無期限）の両方に出力（後述） |
+| ログ | バッチのログは FireLens（Fluent Bit サイドカー）経由で、CloudWatch Logs（直近30日）と S3 `spring-batch-v1-prod-batch-logs-<アカウントID>`（365日で自動削除）の両方に出力（後述） |
 | EventBridge Scheduler | `sampleJob`・`userFetchJob` を1時間に1回実行（`batch_schedule_state` で停止可能） |
 | ECSタスク異常検知 | EventBridge ルール（ECS Task State Change）と API destination。起動失敗・異常終了したタスクを Slack へ通知（後述） |
 | IAM（GitHub Actions） | OIDC経由（Environment `prod` のジョブのみ許可）で、ECRプッシュ権限と、ECS単発タスクの起動・確認権限（DB初期化用）を付与 |
@@ -102,7 +102,7 @@ Webhook URL は、アプリと同じ SSM の `/spring-batch-v1/prod/slack/webhoo
 | 出力先 | 保持期間 | 場所 |
 |---|---|---|
 | CloudWatch Logs | 30日 | `/ecs/spring-batch-v1-prod-spring-batch`（ストリーム: `ecs/spring-batch-app-firelens-<タスクID>`） |
-| S3 | 無期限（ライフサイクルルールなし） | `s3://spring-batch-v1-prod-batch-logs-<アカウントID>/spring-batch/<年>/<月>/<日>/...log.gz` |
+| S3 | 365日（ライフサイクルルールで自動削除。`batch_logs_retention_days` で変更可。`fluent-bit/` 配下の設定ファイルは対象外） | `s3://spring-batch-v1-prod-batch-logs-<アカウントID>/spring-batch/<年>/<月>/<日>/...log.gz` |
 
 - `log_router`（Fluent Bit）自身のログは、バッチのログとは別のロググループ `/ecs/spring-batch-v1-prod-fluent-bit`（保持期間30日、ストリーム: `ecs/log_router/<タスクID>`）に出力します。
 - Fargate では S3 上の設定ファイルを直接指定できないため、Fluent Bit の `init` イメージが、起動時に S3（`fluent-bit/s3-output.conf`）から追加設定（S3への出力）を取得します。CloudWatch Logs への出力は、タスク定義の `logConfiguration` から FireLens が生成します。
