@@ -106,6 +106,7 @@ Webhook URL は、アプリと同じ SSM の `/spring-batch-v1/prod/slack/webhoo
 
 - `log_router`（Fluent Bit）自身のログは、バッチのログとは別のロググループ `/ecs/spring-batch-v1-prod-fluent-bit`（保持期間30日、ストリーム: `ecs/log_router/<タスクID>`）に出力します。
 - Fargate では S3 上の設定ファイルを直接指定できないため、Fluent Bit の `init` イメージが、起動時に S3（`fluent-bit/s3-output.conf`）から追加設定（S3への出力）を取得します。CloudWatch Logs への出力は、タスク定義の `logConfiguration` から FireLens が生成します。
+- Fluent Bit のイメージは `init-3.5.8` に固定しています（`ecs` モジュールの変数 `log_router_image`）。更新するときは、この値を変えて `terraform apply` します。
 - ログの出力に使う権限は、タスクロールに付けています（`ecs_task_logs` ポリシー）。
 
 ### 異常検知との関係

@@ -54,7 +54,7 @@ variable "batch_logs_retention_days" {
 }
 
 variable "log_router_image" {
-  description = "Fluent Bit サイドカーのイメージ（S3 の設定を取得する init イメージ）"
+  description = "Fluent Bit サイドカーのイメージ（S3 の設定を取得する init イメージ。バージョンを固定している）"
   type        = string
-  default     = "public.ecr.aws/aws-observability/aws-for-fluent-bit:init-3"
+  default     = "public.ecr.aws/aws-observability/aws-for-fluent-bit:init-3.5.8"
 }
