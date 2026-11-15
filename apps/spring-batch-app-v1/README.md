@@ -172,6 +172,29 @@ docker compose ps
 
 Docker Composeを使用してビルドする場合、インターネット接続が必要です。プロキシ環境下では適切な設定が必要な場合があります。
 
+#### `unable to get local issuer certificate` などの証明書エラーになる
+
+社内プロキシやセキュリティソフトの SSL スキャンが HTTPS を中継している環境では、コンテナ内からの通信（Gradle の依存取得、`yum`）が、中継用の証明書を信頼できずに失敗します。
+ホストの証明書ストアはコンテナに引き継がれないためです。
+
+環境変数 `EXTRA_CA_CERT_FILE` に、信頼させたい証明書（PEM 形式、**1ファイルに1枚**）のパスを指定してビルドしてください。
+
+```bash
+# bash（Git Bash など）
+EXTRA_CA_CERT_FILE='C:\path\to\root-ca.pem' docker compose build batch-app
+```
+
+```powershell
+# PowerShell
+$env:EXTRA_CA_CERT_FILE = "C:\path\to\root-ca.pem"
+docker compose build batch-app
+```
+
+- 証明書は、BuildKit のビルド用シークレットとして、ビルド中の該当ステップにだけ渡します。**完成したイメージには含まれません。**
+- 環境変数を指定しなければ何もしません。CI（`docker build`）にも影響しません。
+- 毎回指定するのが手間なら、ユーザー環境変数に登録してください。
+- 公開 CA を連結した複数枚入りのファイルは、JVM の信頼ストアに取り込めない場合があります。中継用の CA（ルート証明書）1枚のファイルを指定してください。
+
 ## CI/CD
 
 このプロジェクトはDockerを使用したCI/CDパイプラインに対応しています。`batch/Dockerfile`を使用してコンテナイメージをビルドし、各環境にデプロイできます。
