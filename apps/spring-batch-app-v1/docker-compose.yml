@@ -22,6 +22,9 @@ services:
     build:
       context: .
       dockerfile: batch/Dockerfile
+      # SSL スキャンなどで証明書エラーになる環境向けの追加CA証明書（ビルド時のみ。環境変数 EXTRA_CA_CERT_FILE で指定）
+      secrets:
+        - extra_ca
     container_name: batch-app
     environment:
       JOB_NAME: ${JOB_NAME:-sampleJob}
@@ -33,6 +36,11 @@ services:
       - postgres
     networks:
       - default
+
+secrets:
+  extra_ca:
+    # 未設定のときは空ファイルを渡し、Dockerfile 側で何もしない
+    file: ${EXTRA_CA_CERT_FILE:-./batch/certs/no-extra-ca}
 
 volumes:
   postgres_data:
