@@ -47,3 +47,8 @@ output "log_group_name" {
   description = "CloudWatch Logs log group name for the batch task"
   value       = aws_cloudwatch_log_group.spring_batch.name
 }
+
+output "batch_logs_bucket_name" {
+  description = "S3 bucket name for batch logs"
+  value       = aws_s3_bucket.batch_logs.id
+}
